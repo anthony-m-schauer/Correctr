@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Virtual environments
+venv/
+.venv/
+
+# Environment variables and secrets
+.env
+.env.*
+
+# Local/private Correctr data
+data/*.sqlite
+data/*.db
+data/backups/
+data/exports/
+*.sqlite
+*.db
+
+# Logs
+logs/
+*.log
+
+# Local model files
+models/
+*.gguf
+*.bin
+*.safetensors
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/

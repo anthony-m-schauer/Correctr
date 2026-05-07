@@ -1,0 +1,36 @@
+--------------------------------------------------------------------------------------------------------------------------------
+    Session 1
+
+What I did
+- I started Correctr by creating the main architecture and workflow document for the project. This document lays out the 
+full concept-level structure, including the project goals, core workflow, planned features, correction layers, data 
+storage, LLM role, neural ranker idea, risks, deliverables, and helper-chat planning. I used that document as the main 
+source file for the new ChatGPT Project so future chats can stay grounded in the same project direction.
+
+- I also created the first set of project helper chats. The initial team now includes the Project Manager, Journalist, 
+Brainstormer, and Developer 1 chats. This gives the project a few focused places to handle planning, journaling, 
+idea generation, and technical build support instead of trying to do everything in one conversation.
+
+- I also did some early hands-on setup for fun and practice before fully handing technical setup to the developer chat. I 
+created the local Correctr project folder under my projects folder, set up the virtual environment, and created the 
+first project files and directories. This included the docs area with the architecture document and journal, the agents 
+area for future agentic scripts, the data area, the .gitignore file, requirements file, config script, and app script.
+
+Why this mattered
+- This session turned Correctr from an idea into an organized project with a real source-of-truth document, a ChatGPT 
+Project workspace, helper chats, and the first local project structure. It also gave the project a cleaner foundation 
+before implementation starts, while still keeping the main build goal focused on eventually proving the hotkey, correction, 
+paste-back, and learning-data workflow.
+
+Key decisions
+- Use the architecture and workflow document as the main source of truth for Correctr
+- Create a ChatGPT Project with the architecture document uploaded as the main source file
+- Start the project with focused helper chats instead of one overloaded general chat
+- Use separate helper chats for project management, journaling, brainstorming, and development
+- Set up the first local project folder, virtual environment, and starter files before deeper implementation work
+- Keep the early file structure organized around docs, agents, data, configuration, requirements, and the app entry point
+- Treat the initial setup as practice and foundation-building, not as the full technical implementation yet
+
+--------------------------------------------------------------------------------------------------------------------------------
+    Session 2
+
