@@ -5,8 +5,8 @@ Purpose:
     Holds simple runtime settings for Correctr.
 
 Current scope:
-    Adds controlled AI/context provider configuration while preserving the
-    existing hotkey and clipboard settings.
+    Adds controlled correction pipeline routing configuration while preserving
+    existing hotkey, clipboard, and AI/context provider settings.
 
 Do not put secrets, API keys, database credentials, or local model files here.
 Those belong in environment variables, local config, or future setup docs.
@@ -19,6 +19,13 @@ from dataclasses import dataclass
 
 AI_PROVIDER = "mock"
 ALLOWED_AI_PROVIDERS = {"disabled", "mock", "ollama", "openai"}
+
+CORRECTION_PIPELINE_MODE = "dictionary_then_ai_if_unchanged"
+ALLOWED_CORRECTION_PIPELINE_MODES = {
+    "dictionary_only",
+    "dictionary_then_ai_if_unchanged",
+    "dictionary_then_ai_always",
+}
 
 
 @dataclass(frozen=True)
@@ -47,6 +54,7 @@ class AppConfig:
     restore_original_clipboard_after_paste: bool = True
 
     ai_provider: str = AI_PROVIDER
+    correction_pipeline_mode: str = CORRECTION_PIPELINE_MODE
 
     log_level: str = "INFO"
 
@@ -65,11 +73,22 @@ def validate_ai_provider(provider: str) -> str:
     """
     Validates the configured AI/context provider.
 
-    The current implemented provider is mock. Other values are reserved for
-    future work and should not be called until implemented.
+    The current implemented providers are mock and disabled. Other values are
+    reserved for future work and should not be called until implemented.
     """
     if provider not in ALLOWED_AI_PROVIDERS:
         allowed = ", ".join(sorted(ALLOWED_AI_PROVIDERS))
         raise ValueError(f"Unsupported AI provider: {provider!r}. Allowed providers: {allowed}")
 
     return provider
+
+
+def validate_correction_pipeline_mode(mode: str) -> str:
+    """
+    Validates the configured correction pipeline mode.
+    """
+    if mode not in ALLOWED_CORRECTION_PIPELINE_MODES:
+        allowed = ", ".join(sorted(ALLOWED_CORRECTION_PIPELINE_MODES))
+        raise ValueError(f"Unsupported correction pipeline mode: {mode!r}. Allowed modes: {allowed}")
+
+    return mode

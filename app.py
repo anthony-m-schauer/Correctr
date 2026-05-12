@@ -8,12 +8,12 @@ Current behavior:
     1. User highlights text in another app.
     2. User presses the Correctr hotkey.
     3. Correctr copies the selected text.
-    4. Correctr applies local deterministic typo corrections.
-    5. Correctr pastes the corrected result over the selected text.
-    6. If the text changed, Correctr saves a dictionary correction event.
+    4. Correctr runs the controlled correction orchestrator.
+    5. Correctr pastes the final corrected result over the selected text.
+    6. If the text changed, Correctr saves one correction event.
 
 Current scope:
-    Correction Event Integration_v0.1.
+    Correction Orchestrator_v0.1 Controlled Routing Layer.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ from logging import Logger
 
 from correctr.clipboard_handler import ClipboardHandler, ClipboardOperationError
 from correctr.config import AppConfig, get_default_config
-from correctr.correction_engine import correct_text_detailed
+from correctr.correction_orchestrator import correct_with_orchestration, get_event_source_for_result
 from correctr.database import save_correction_event
 from correctr.hotkey_runner import HotkeyRunner
 from correctr.logging_utils import setup_logging
@@ -34,9 +34,8 @@ class CorrectrApp:
     """
     Coordinates the current Correctr hotkey correction workflow.
 
-    The app uses the structured CorrectionResult internally so changed
-    dictionary corrections can be saved to SQLite, while the user-facing
-    behavior still only pastes corrected text.
+    The app delegates correction routing to correctr.correction_orchestrator.
+    It stays responsible for clipboard IO and one-event-per-correction logging.
     """
 
     def __init__(self, config: AppConfig, logger: Logger) -> None:
@@ -84,7 +83,11 @@ class CorrectrApp:
         time.sleep(self.config.hotkey_release_delay_seconds)
 
         capture = self.clipboard_handler.copy_selected_text()
-        result = correct_text_detailed(capture.selected_text)
+        result = correct_with_orchestration(
+            capture.selected_text,
+            pipeline_mode=self.config.correction_pipeline_mode,
+            ai_provider_mode=self.config.ai_provider,
+        )
 
         self.clipboard_handler.paste_text(
             text_to_paste=result.corrected_text,
@@ -92,44 +95,48 @@ class CorrectrApp:
         )
 
         self.logger.info(
-            "Correctr replacement pasted. Original length: %s chars. Corrected length: %s chars.",
+            "Correctr replacement pasted. Original length: %s chars. Corrected length: %s chars. Route: %s.",
             len(result.original_text),
             len(result.corrected_text),
+            result.engine_version,
         )
 
         if result.changed:
-            self._save_dictionary_event(result)
+            self._save_correction_event(result)
         else:
-            self.logger.info("No dictionary correction event saved because text did not change.")
+            self.logger.info("No correction event saved because final text did not change.")
 
-    def _save_dictionary_event(self, result) -> None:
+    def _save_correction_event(self, result) -> None:
         """
-        Saves a changed dictionary correction event.
+        Saves one changed correction event from the final orchestrator result.
 
         Database errors are logged but do not crash the hotkey listener.
         """
         try:
+            source = get_event_source_for_result(result)
             event_id = save_correction_event(
                 original_text=result.original_text,
                 corrected_text=result.corrected_text,
-                source="dictionary",
+                source=source,
                 changed=result.changed,
                 corrections=result.corrections,
                 engine_version=result.engine_version,
-                notes="Saved from hotkey app workflow.",
+                notes="Saved from orchestrated hotkey app workflow.",
             )
-            self.logger.info("Dictionary correction event saved. Event id: %s", event_id)
+            self.logger.info("Correction event saved. Source: %s. Event id: %s", source, event_id)
         except Exception as error:
-            self.logger.exception("Failed to save dictionary correction event: %s", error)
+            self.logger.exception("Failed to save correction event: %s", error)
 
 
 def main() -> None:
     config = get_default_config()
     logger = setup_logging(config.log_level)
 
-    logger.info("Starting Correctr Correction Event Integration_v0.1.")
+    logger.info("Starting Correctr Correction Orchestrator_v0.1.")
     logger.info("Activation hotkey: %s", config.activation_hotkey)
     logger.info("Stop hotkey: %s", config.stop_hotkey)
+    logger.info("Correction pipeline mode: %s", config.correction_pipeline_mode)
+    logger.info("AI provider mode: %s", config.ai_provider)
     logger.info("Test first in Notepad with simple highlighted text.")
 
     app = CorrectrApp(config=config, logger=logger)
