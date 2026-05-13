@@ -5,8 +5,8 @@ Purpose:
     Holds simple runtime settings for Correctr.
 
 Current scope:
-    Adds controlled correction pipeline routing configuration while preserving
-    existing hotkey, clipboard, and AI/context provider settings.
+    Adds controlled dictionary-first AI-if-needed routing configuration while
+    preserving existing hotkey, clipboard, AI/context, and Ollama settings.
 
 Do not put secrets, API keys, database credentials, or local model files here.
 Those belong in environment variables, local config, or future setup docs.
@@ -17,14 +17,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-AI_PROVIDER = "mock"
+AI_PROVIDER = "ollama"
 ALLOWED_AI_PROVIDERS = {"disabled", "mock", "ollama", "openai"}
 
-CORRECTION_PIPELINE_MODE = "dictionary_then_ai_if_unchanged"
+OLLAMA_BASE_URL = "http://localhost:11434"
+OLLAMA_MODEL = "llama3.2:3b"
+OLLAMA_TIMEOUT_SECONDS = 10.0
+
+CORRECTION_PIPELINE_MODE = "dictionary_then_ai_if_needed"
 ALLOWED_CORRECTION_PIPELINE_MODES = {
     "dictionary_only",
     "dictionary_then_ai_if_unchanged",
     "dictionary_then_ai_always",
+    "dictionary_then_ai_if_needed",
 }
 
 
@@ -56,6 +61,10 @@ class AppConfig:
     ai_provider: str = AI_PROVIDER
     correction_pipeline_mode: str = CORRECTION_PIPELINE_MODE
 
+    ollama_base_url: str = OLLAMA_BASE_URL
+    ollama_model: str = OLLAMA_MODEL
+    ollama_timeout_seconds: float = OLLAMA_TIMEOUT_SECONDS
+
     log_level: str = "INFO"
 
 
@@ -72,9 +81,6 @@ def get_default_config() -> AppConfig:
 def validate_ai_provider(provider: str) -> str:
     """
     Validates the configured AI/context provider.
-
-    The current implemented providers are mock and disabled. Other values are
-    reserved for future work and should not be called until implemented.
     """
     if provider not in ALLOWED_AI_PROVIDERS:
         allowed = ", ".join(sorted(ALLOWED_AI_PROVIDERS))

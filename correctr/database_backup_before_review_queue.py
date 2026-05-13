@@ -342,16 +342,7 @@ def save_manual_correction_from_event(
     database_path: str | Path | None = None,
 ) -> int:
     """
-    Saves a trusted manual teach-back correction using the original text from an event.
-
-    This is the review-queue fix path:
-    - the original raw automatic event is preserved
-    - the original event is marked review_status = manually_corrected
-    - a new source = manual event is created and linked back to the original
-    - the new manual event is marked review_status = accepted
-
-    The original manually_corrected event should be treated as failure/history data.
-    The linked accepted manual event is the trusted correction example.
+    Saves a manual teach-back correction using the original text from an event.
 
     Args:
         event_id:
@@ -366,40 +357,20 @@ def save_manual_correction_from_event(
     Returns:
         Inserted manual correction event id.
     """
-    intended_text = corrected_text.strip()
-
-    if not intended_text:
-        raise ValueError("corrected_text cannot be blank.")
-
     event = fetch_correction_event_by_id(event_id, database_path=database_path)
 
     if event is None:
         raise ValueError(f"No correction event found with id {event_id}.")
 
-    manual_notes = notes or f"Manual correction from review queue event ID {event_id}."
+    manual_notes = notes or f"Manual correction from reviewed event ID {event_id}."
 
-    manual_event_id = save_correction_event(
+    return save_manual_correction(
         original_text=event["original_text"],
-        corrected_text=intended_text,
-        source="manual",
-        changed=event["original_text"] != intended_text,
-        corrections=[],
-        engine_version="review_queue_manual_v0.1",
+        corrected_text=corrected_text,
         notes=manual_notes,
         database_path=database_path,
-        review_status="accepted",
         linked_event_id=event_id,
-        review_notes=manual_notes,
     )
-
-    mark_correction_event_reviewed(
-        event_id=event_id,
-        review_status="manually_corrected",
-        review_notes=f"Manual correction saved as linked event ID {manual_event_id}.",
-        database_path=database_path,
-    )
-
-    return manual_event_id
 
 
 def fetch_recent_correction_events(
@@ -446,151 +417,6 @@ def fetch_recent_correction_events(
             LIMIT ?
             """,
             (limit,),
-        ).fetchall()
-
-    return [_row_to_event(row) for row in rows]
-
-
-def fetch_unreviewed_correction_events(
-    *,
-    limit: int | None = None,
-    database_path: str | Path | None = None,
-    oldest_first: bool = True,
-) -> list[dict[str, Any]]:
-    """
-    Fetches correction events that still need review.
-
-    NULL or blank review_status values are treated as unreviewed so older
-    migrated rows cannot bypass the review queue.
-
-    Args:
-        limit:
-            Optional maximum number of events to return.
-        database_path:
-            Optional override database path.
-        oldest_first:
-            If true, review oldest unreviewed events first.
-
-    Returns:
-        List of unreviewed event dictionaries.
-    """
-    if limit is not None and limit < 1:
-        raise ValueError("limit must be at least 1.")
-
-    order_direction = "ASC" if oldest_first else "DESC"
-    limit_clause = "" if limit is None else " LIMIT ?"
-
-    params: list[Any] = []
-    if limit is not None:
-        params.append(limit)
-
-    db_path = initialize_database(database_path)
-
-    with _connect(db_path) as connection:
-        rows = connection.execute(
-            f"""
-            SELECT
-                id,
-                created_at,
-                source,
-                original_text,
-                corrected_text,
-                changed,
-                corrections_json,
-                engine_version,
-                notes,
-                review_status,
-                reviewed_at,
-                linked_event_id,
-                review_notes
-            FROM correction_events
-            WHERE review_status IS NULL
-               OR TRIM(review_status) = ''
-               OR review_status = 'unreviewed'
-            ORDER BY created_at {order_direction}, id {order_direction}
-            {limit_clause}
-            """,
-            tuple(params),
-        ).fetchall()
-
-    return [_row_to_event(row) for row in rows]
-
-
-def fetch_trusted_correction_events(
-    *,
-    limit: int | None = None,
-    database_path: str | Path | None = None,
-    include_accepted_ai: bool = True,
-    oldest_first: bool = True,
-) -> list[dict[str, Any]]:
-    """
-    Fetches only correction events safe for personal memory/export/ranker work.
-
-    Trusted policy:
-    - source = manual and review_status = accepted is trusted.
-    - source = dictionary and review_status = accepted is trusted.
-    - source = ai_context and review_status = accepted is trusted only when
-      include_accepted_ai is true.
-    - Original automatic rows marked manually_corrected are not trusted
-      positive examples; the linked accepted manual row is trusted instead.
-    - rejected, test_event, uncertain, unreviewed, blank, and NULL statuses
-      are excluded.
-
-    Args:
-        limit:
-            Optional maximum number of events to return.
-        database_path:
-            Optional override database path.
-        include_accepted_ai:
-            Whether explicitly accepted ai_context rows should be included.
-        oldest_first:
-            If true, returns oldest trusted examples first.
-
-    Returns:
-        List of trusted correction event dictionaries.
-    """
-    if limit is not None and limit < 1:
-        raise ValueError("limit must be at least 1.")
-
-    trusted_sources = ["manual", "dictionary"]
-
-    if include_accepted_ai:
-        trusted_sources.append("ai_context")
-
-    placeholders = ", ".join("?" for _ in trusted_sources)
-    order_direction = "ASC" if oldest_first else "DESC"
-    limit_clause = "" if limit is None else " LIMIT ?"
-
-    params: list[Any] = ["accepted", *trusted_sources]
-    if limit is not None:
-        params.append(limit)
-
-    db_path = initialize_database(database_path)
-
-    with _connect(db_path) as connection:
-        rows = connection.execute(
-            f"""
-            SELECT
-                id,
-                created_at,
-                source,
-                original_text,
-                corrected_text,
-                changed,
-                corrections_json,
-                engine_version,
-                notes,
-                review_status,
-                reviewed_at,
-                linked_event_id,
-                review_notes
-            FROM correction_events
-            WHERE review_status = ?
-              AND source IN ({placeholders})
-            ORDER BY created_at {order_direction}, id {order_direction}
-            {limit_clause}
-            """,
-            tuple(params),
         ).fetchall()
 
     return [_row_to_event(row) for row in rows]

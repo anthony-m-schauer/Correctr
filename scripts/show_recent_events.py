@@ -6,7 +6,7 @@ Run from the project root:
     python scripts/show_recent_events.py
 
 This script prints recent events from the local SQLite database so the user can
-confirm dictionary and manual correction events were saved.
+confirm dictionary, manual, and AI/context correction events were saved.
 """
 
 from __future__ import annotations
@@ -38,11 +38,18 @@ def main() -> None:
         print(f"Source: {event['source']}")
         print(f"Changed: {event['changed']}")
         print(f"Engine: {event['engine_version']}")
+        print(f"Review status: {event['review_status']}")
+        if event["reviewed_at"]:
+            print(f"Reviewed at: {event['reviewed_at']}")
+        if event["linked_event_id"] is not None:
+            print(f"Linked event id: {event['linked_event_id']}")
         print(f"Original: {event['original_text']}")
         print(f"Corrected: {event['corrected_text']}")
         print(f"Corrections: {event['corrections']}")
         if event["notes"]:
             print(f"Notes: {event['notes']}")
+        if event["review_notes"]:
+            print(f"Review notes: {event['review_notes']}")
         print("---------------------------------")
 
 
