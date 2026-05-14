@@ -26,7 +26,6 @@ OLLAMA_MODEL = "llama3.2:3b"
 OLLAMA_TIMEOUT_SECONDS = 10.0
 
 CORRECTION_PIPELINE_MODE = "dictionary_then_ai_if_needed"
-ENABLE_PERSONAL_MEMORY = True
 
 # Collect mode proposal pipeline controls the draft shown in the review popup.
 # This can be more aggressive than normal mode because the user approves or edits
@@ -37,7 +36,6 @@ ALLOWED_CORRECTION_PIPELINE_MODES = {
     "dictionary_then_ai_if_unchanged",
     "dictionary_then_ai_always",
     "dictionary_then_ai_if_needed",
-    "memory_then_dictionary_then_ai_if_needed",
 }
 
 # Collect mode is the safest data-building mode.
@@ -94,7 +92,6 @@ class AppConfig:
     ai_provider: str = AI_PROVIDER
     correction_pipeline_mode: str = CORRECTION_PIPELINE_MODE
     collect_mode_proposal_pipeline_mode: str = COLLECT_MODE_PROPOSAL_PIPELINE_MODE
-    enable_personal_memory: bool = ENABLE_PERSONAL_MEMORY
 
     ollama_base_url: str = OLLAMA_BASE_URL
     ollama_model: str = OLLAMA_MODEL

@@ -5,7 +5,7 @@ Purpose:
     Prints the full correction_events history from the local SQLite database.
     This is useful for QA/data-quality review when show_recent_events.py is too limited.
 
-Usage:
+Usage from the project root:
     python scripts/show_all_events.py
     python scripts/show_all_events.py --limit 100
 """
@@ -58,7 +58,7 @@ def main() -> None:
         if event.get("reviewed_at"):
             print(f"Reviewed at: {event['reviewed_at']}")
 
-        if event.get("linked_event_id"):
+        if event.get("linked_event_id") is not None:
             print(f"Linked event id: {event['linked_event_id']}")
 
         print(f"Original: {event['original_text']}")

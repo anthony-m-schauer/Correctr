@@ -6,6 +6,7 @@ Purpose:
 
 Current scope:
     Manual Rejection Review_v0.1 Recent Event Review + Teach-Back.
+    Collect Mode / Trusted Save Workflow_v0.1 helper support.
 
 This module stores correction events locally so future layers can use them for:
     - manual teach-back
@@ -15,7 +16,7 @@ This module stores correction events locally so future layers can use them for:
     - review labels for data quality
 
 This module does not add neural ranking, suggestion UI, advanced spellcheck,
-or app/hotkey behavior changes.
+or app/hotkey behavior changes by itself.
 """
 
 from __future__ import annotations
@@ -55,14 +56,6 @@ DEFAULT_COLLECT_MODE_MANUAL_ENGINE_VERSION = "collect_mode_manual_v0.1"
 def get_database_path(database_path: str | Path | None = None) -> Path:
     """
     Returns the SQLite database path.
-
-    Args:
-        database_path:
-            Optional override path. Tests should pass a temporary path so they
-            do not write to the real project database.
-
-    Returns:
-        Path to the SQLite database.
     """
     if database_path is None:
         return DEFAULT_DATABASE_PATH
@@ -76,13 +69,6 @@ def initialize_database(database_path: str | Path | None = None) -> Path:
 
     This also performs a small safe migration for review fields added in
     Manual Rejection Review_v0.1. Existing rows are preserved.
-
-    Args:
-        database_path:
-            Optional override path.
-
-    Returns:
-        Path to the initialized database.
     """
     db_path = get_database_path(database_path)
     db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -177,36 +163,6 @@ def save_correction_event(
 ) -> int:
     """
     Saves a correction event to SQLite.
-
-    Args:
-        original_text:
-            Text before correction.
-        corrected_text:
-            Text after correction.
-        source:
-            Correction source. Supported values include:
-            dictionary, manual, ai_context, future_llm, future_memory, future_ranker.
-        changed:
-            Optional explicit changed flag. If omitted, it is inferred from
-            original_text != corrected_text.
-        corrections:
-            Optional structured correction records.
-        engine_version:
-            Version/name of the correction source.
-        notes:
-            Optional human note.
-        database_path:
-            Optional override database path.
-        review_status:
-            Review status for the event. Defaults to unreviewed.
-        linked_event_id:
-            Optional event id this event is linked to, such as a manual
-            correction created from a bad automatic event.
-        review_notes:
-            Optional review note.
-
-    Returns:
-        Inserted row id.
     """
     _validate_source(source)
     _validate_review_status(review_status)
@@ -320,7 +276,8 @@ def save_manual_correction(
     Saves a manual teach-back correction.
 
     This captures useful training data when Correctr fails or produces an
-    incomplete correction.
+    incomplete correction. Manual capture defaults to unreviewed unless the
+    caller uses save_correction_event() or save_collect_mode_manual_correction().
     """
     return save_correction_event(
         original_text=original_text,
@@ -346,7 +303,7 @@ def save_collect_mode_manual_correction(
     Saves a collect-mode manual correction as trusted accepted data.
 
     Collect mode is explicitly human-confirmed. When the user edits/fixes the
-    proposed output before applying it, this row is safe to treat as trusted
+    proposed output before applying it, that row is safe to treat as trusted
     correction memory/export data.
     """
     intended_text = corrected_text.strip()
@@ -386,19 +343,6 @@ def save_manual_correction_from_event(
 
     The original manually_corrected event should be treated as failure/history data.
     The linked accepted manual event is the trusted correction example.
-
-    Args:
-        event_id:
-            Existing event that was wrong or incomplete.
-        corrected_text:
-            User-provided intended correction.
-        notes:
-            Optional note for the new manual event.
-        database_path:
-            Optional override database path.
-
-    Returns:
-        Inserted manual correction event id.
     """
     intended_text = corrected_text.strip()
 
@@ -443,15 +387,6 @@ def fetch_recent_correction_events(
 ) -> list[dict[str, Any]]:
     """
     Fetches recent correction events.
-
-    Args:
-        limit:
-            Maximum number of events to return.
-        database_path:
-            Optional override database path.
-
-    Returns:
-        List of event dictionaries ordered newest first.
     """
     if limit < 1:
         raise ValueError("limit must be at least 1.")
@@ -496,17 +431,6 @@ def fetch_unreviewed_correction_events(
 
     NULL or blank review_status values are treated as unreviewed so older
     migrated rows cannot bypass the review queue.
-
-    Args:
-        limit:
-            Optional maximum number of events to return.
-        database_path:
-            Optional override database path.
-        oldest_first:
-            If true, review oldest unreviewed events first.
-
-    Returns:
-        List of unreviewed event dictionaries.
     """
     if limit is not None and limit < 1:
         raise ValueError("limit must be at least 1.")
@@ -556,9 +480,6 @@ def fetch_trusted_correction_events(
     database_path: str | Path | None = None,
     include_accepted_ai: bool = True,
     oldest_first: bool = True,
-    exclude_blank: bool = True,
-    exclude_unchanged: bool = True,
-    deduplicate_exact_pairs: bool = True,
 ) -> list[dict[str, Any]]:
     """
     Fetches only correction events safe for personal memory/export/ranker work.
@@ -572,32 +493,6 @@ def fetch_trusted_correction_events(
       positive examples; the linked accepted manual row is trusted instead.
     - rejected, test_event, uncertain, unreviewed, blank, and NULL statuses
       are excluded.
-    - Blank original/corrected text rows are excluded by default.
-    - Unchanged original_text == corrected_text rows are excluded by default.
-    - Exact duplicate original_text + corrected_text pairs can be collapsed when requested.
-
-    Args:
-        limit:
-            Optional maximum number of trusted events to return after filtering.
-        database_path:
-            Optional override database path.
-        include_accepted_ai:
-            Whether explicitly accepted ai_context rows should be included.
-        oldest_first:
-            If true, returns oldest trusted examples first.
-        exclude_blank:
-            If true, excludes rows with blank original_text or corrected_text.
-        exclude_unchanged:
-            If true, excludes rows where original_text == corrected_text.
-        deduplicate_exact_pairs:
-            If true, keeps only the first duplicate within the same source and exact
-            original_text + corrected_text pair in the requested order. Database rows
-            are not deleted. This keeps repeated manual duplicate rows from being
-            exported while still allowing separately reviewed manual/dictionary/AI
-            examples to coexist when their sources differ.
-
-    Returns:
-        List of trusted correction event dictionaries.
     """
     if limit is not None and limit < 1:
         raise ValueError("limit must be at least 1.")
@@ -609,8 +504,11 @@ def fetch_trusted_correction_events(
 
     placeholders = ", ".join("?" for _ in trusted_sources)
     order_direction = "ASC" if oldest_first else "DESC"
+    limit_clause = "" if limit is None else " LIMIT ?"
 
     params: list[Any] = ["accepted", *trusted_sources]
+    if limit is not None:
+        params.append(limit)
 
     db_path = initialize_database(database_path)
 
@@ -635,90 +533,6 @@ def fetch_trusted_correction_events(
             WHERE review_status = ?
               AND source IN ({placeholders})
             ORDER BY created_at {order_direction}, id {order_direction}
-            """,
-            tuple(params),
-        ).fetchall()
-
-    trusted_events: list[dict[str, Any]] = []
-    seen_pairs: set[tuple[str, str]] = set()
-
-    for row in rows:
-        event = _row_to_event(row)
-        original_text = event["original_text"]
-        corrected_text = event["corrected_text"]
-
-        if exclude_blank and (
-            not original_text.strip() or not corrected_text.strip()
-        ):
-            continue
-
-        if exclude_unchanged and original_text == corrected_text:
-            continue
-
-        exact_pair = (event["source"], original_text, corrected_text)
-        if deduplicate_exact_pairs and exact_pair in seen_pairs:
-            continue
-
-        seen_pairs.add(exact_pair)
-        trusted_events.append(event)
-
-        if limit is not None and len(trusted_events) >= limit:
-            break
-
-    return trusted_events
-
-
-def fetch_all_correction_events(
-    *,
-    limit: int | None = None,
-    database_path: str | Path | None = None,
-    oldest_first: bool = True,
-) -> list[dict[str, Any]]:
-    """
-    Fetches all correction events for local QA/reporting.
-
-    Args:
-        limit:
-            Optional maximum number of events to return.
-        database_path:
-            Optional override database path.
-        oldest_first:
-            If true, returns oldest events first.
-
-    Returns:
-        List of event dictionaries.
-    """
-    if limit is not None and limit < 1:
-        raise ValueError("limit must be at least 1.")
-
-    order_direction = "ASC" if oldest_first else "DESC"
-    limit_clause = "" if limit is None else " LIMIT ?"
-    params: list[Any] = []
-
-    if limit is not None:
-        params.append(limit)
-
-    db_path = initialize_database(database_path)
-
-    with _connect(db_path) as connection:
-        rows = connection.execute(
-            f"""
-            SELECT
-                id,
-                created_at,
-                source,
-                original_text,
-                corrected_text,
-                changed,
-                corrections_json,
-                engine_version,
-                notes,
-                review_status,
-                reviewed_at,
-                linked_event_id,
-                review_notes
-            FROM correction_events
-            ORDER BY created_at {order_direction}, id {order_direction}
             {limit_clause}
             """,
             tuple(params),
@@ -734,9 +548,6 @@ def fetch_correction_event_by_id(
 ) -> dict[str, Any] | None:
     """
     Fetches one correction event by id.
-
-    Returns:
-        Event dictionary, or None if no matching event exists.
     """
     db_path = initialize_database(database_path)
 
@@ -778,17 +589,6 @@ def mark_correction_event_reviewed(
 ) -> None:
     """
     Marks one correction event with a review status.
-
-    Args:
-        event_id:
-            Event to update.
-        review_status:
-            One of unreviewed, accepted, rejected, manually_corrected,
-            test_event, uncertain.
-        review_notes:
-            Optional review note.
-        database_path:
-            Optional override database path.
     """
     _validate_review_status(review_status)
 

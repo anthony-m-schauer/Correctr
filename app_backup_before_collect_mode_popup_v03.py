@@ -14,7 +14,7 @@ Current behavior:
        optionally save an unreviewed raw event.
 
 Current scope:
-    Collect Mode Popup Review_v0.2 with stronger collect-mode proposal generation.
+    Collect Mode Popup Review_v0.1.
 """
 
 from __future__ import annotations
@@ -92,7 +92,11 @@ class CorrectrApp:
         time.sleep(self.config.hotkey_release_delay_seconds)
 
         capture = self.clipboard_handler.copy_selected_text()
-        result = self._run_correction_for_current_mode(capture.selected_text)
+        result = correct_with_orchestration(
+            capture.selected_text,
+            pipeline_mode=self.config.correction_pipeline_mode,
+            ai_provider_mode=self.config.ai_provider,
+        )
 
         if self.config.collect_mode_enabled:
             self._handle_collect_mode_result(
@@ -104,34 +108,6 @@ class CorrectrApp:
         self._handle_auto_mode_result(
             result=result,
             original_clipboard_text=capture.original_clipboard_text,
-        )
-
-
-    def _run_correction_for_current_mode(self, selected_text: str) -> Any:
-        """
-        Runs correction with the right pipeline for the current operating mode.
-
-        Collect mode intentionally uses a stronger proposal pipeline because the
-        user reviews the result before paste/save. This gives the popup a real
-        draft correction instead of showing the unchanged text whenever the
-        conservative AI-if-needed gate misses a typo pattern.
-        """
-        pipeline_mode = self.config.correction_pipeline_mode
-
-        if self.config.collect_mode_enabled:
-            pipeline_mode = self.config.collect_mode_proposal_pipeline_mode
-
-        self.logger.info(
-            "Running correction proposal. Collect mode: %s. Pipeline mode: %s. AI provider: %s.",
-            self.config.collect_mode_enabled,
-            pipeline_mode,
-            self.config.ai_provider,
-        )
-
-        return correct_with_orchestration(
-            selected_text,
-            pipeline_mode=pipeline_mode,
-            ai_provider_mode=self.config.ai_provider,
         )
 
     def _handle_auto_mode_result(self, *, result: Any, original_clipboard_text: str) -> None:
@@ -407,11 +383,10 @@ def main() -> None:
     config = get_default_config()
     logger = setup_logging(config.log_level)
 
-    logger.info("Starting Correctr Collect Mode Popup Review_v0.2.")
+    logger.info("Starting Correctr Collect Mode Popup Review_v0.1.")
     logger.info("Activation hotkey: %s", config.activation_hotkey)
     logger.info("Stop hotkey: %s", config.stop_hotkey)
     logger.info("Correction pipeline mode: %s", config.correction_pipeline_mode)
-    logger.info("Collect mode proposal pipeline mode: %s", config.collect_mode_proposal_pipeline_mode)
     logger.info("AI provider mode: %s", config.ai_provider)
     logger.info("Collect mode enabled: %s", config.collect_mode_enabled)
     logger.info("Collect mode review interface: %s", config.collect_mode_review_interface)

@@ -558,7 +558,7 @@ def fetch_trusted_correction_events(
     oldest_first: bool = True,
     exclude_blank: bool = True,
     exclude_unchanged: bool = True,
-    deduplicate_exact_pairs: bool = True,
+    deduplicate_exact_pairs: bool = False,
 ) -> list[dict[str, Any]]:
     """
     Fetches only correction events safe for personal memory/export/ranker work.
@@ -590,11 +590,10 @@ def fetch_trusted_correction_events(
         exclude_unchanged:
             If true, excludes rows where original_text == corrected_text.
         deduplicate_exact_pairs:
-            If true, keeps only the first duplicate within the same source and exact
-            original_text + corrected_text pair in the requested order. Database rows
-            are not deleted. This keeps repeated manual duplicate rows from being
-            exported while still allowing separately reviewed manual/dictionary/AI
-            examples to coexist when their sources differ.
+            If true, keeps only the first exact original_text + corrected_text pair
+            in the requested order. Database rows are not deleted. Defaults to False
+            so general trusted-data fetches remain complete; export scripts should
+            pass True when producing deduplicated datasets.
 
     Returns:
         List of trusted correction event dictionaries.
@@ -655,7 +654,7 @@ def fetch_trusted_correction_events(
         if exclude_unchanged and original_text == corrected_text:
             continue
 
-        exact_pair = (event["source"], original_text, corrected_text)
+        exact_pair = (original_text, corrected_text)
         if deduplicate_exact_pairs and exact_pair in seen_pairs:
             continue
 

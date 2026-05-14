@@ -574,7 +574,7 @@ def fetch_trusted_correction_events(
       are excluded.
     - Blank original/corrected text rows are excluded by default.
     - Unchanged original_text == corrected_text rows are excluded by default.
-    - Exact duplicate original_text + corrected_text pairs can be collapsed when requested.
+    - Exact duplicate original_text + corrected_text pairs are collapsed by default.
 
     Args:
         limit:
@@ -590,11 +590,8 @@ def fetch_trusted_correction_events(
         exclude_unchanged:
             If true, excludes rows where original_text == corrected_text.
         deduplicate_exact_pairs:
-            If true, keeps only the first duplicate within the same source and exact
-            original_text + corrected_text pair in the requested order. Database rows
-            are not deleted. This keeps repeated manual duplicate rows from being
-            exported while still allowing separately reviewed manual/dictionary/AI
-            examples to coexist when their sources differ.
+            If true, keeps only the first exact original_text + corrected_text pair
+            in the requested order. Database rows are not deleted.
 
     Returns:
         List of trusted correction event dictionaries.
@@ -655,7 +652,7 @@ def fetch_trusted_correction_events(
         if exclude_unchanged and original_text == corrected_text:
             continue
 
-        exact_pair = (event["source"], original_text, corrected_text)
+        exact_pair = (original_text, corrected_text)
         if deduplicate_exact_pairs and exact_pair in seen_pairs:
             continue
 

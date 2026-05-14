@@ -26,35 +26,16 @@ OLLAMA_MODEL = "llama3.2:3b"
 OLLAMA_TIMEOUT_SECONDS = 10.0
 
 CORRECTION_PIPELINE_MODE = "dictionary_then_ai_if_needed"
-ENABLE_PERSONAL_MEMORY = True
-
-# Collect mode proposal pipeline controls the draft shown in the review popup.
-# This can be more aggressive than normal mode because the user approves or edits
-# before Correctr pastes/saves anything.
-COLLECT_MODE_PROPOSAL_PIPELINE_MODE = "dictionary_then_ai_always"
 ALLOWED_CORRECTION_PIPELINE_MODES = {
     "dictionary_only",
     "dictionary_then_ai_if_unchanged",
     "dictionary_then_ai_always",
     "dictionary_then_ai_if_needed",
-    "memory_then_dictionary_then_ai_if_needed",
 }
 
 # Collect mode is the safest data-building mode.
 # When enabled, Correctr asks before pasting/saving the correction.
 COLLECT_MODE_ENABLED = True
-
-# popup = small tkinter confirmation window.
-# terminal = older VS Code/terminal prompt flow.
-COLLECT_MODE_REVIEW_INTERFACE = "popup"
-ALLOWED_COLLECT_MODE_REVIEW_INTERFACES = {"popup", "terminal"}
-
-# Keep the popup above normal windows so it is easy to find during collection.
-COLLECT_MODE_POPUP_ALWAYS_ON_TOP = True
-
-# Small delay after the popup closes so Windows can return focus to the app
-# where the text was originally selected before Correctr sends Ctrl+V.
-AFTER_COLLECT_MODE_DIALOG_CLOSE_DELAY_SECONDS = 0.35
 
 # When collect mode is off, Correctr can still paste automatic corrections.
 # This flag controls whether those automatic corrections are saved as raw,
@@ -93,17 +74,12 @@ class AppConfig:
 
     ai_provider: str = AI_PROVIDER
     correction_pipeline_mode: str = CORRECTION_PIPELINE_MODE
-    collect_mode_proposal_pipeline_mode: str = COLLECT_MODE_PROPOSAL_PIPELINE_MODE
-    enable_personal_memory: bool = ENABLE_PERSONAL_MEMORY
 
     ollama_base_url: str = OLLAMA_BASE_URL
     ollama_model: str = OLLAMA_MODEL
     ollama_timeout_seconds: float = OLLAMA_TIMEOUT_SECONDS
 
     collect_mode_enabled: bool = COLLECT_MODE_ENABLED
-    collect_mode_review_interface: str = COLLECT_MODE_REVIEW_INTERFACE
-    collect_mode_popup_always_on_top: bool = COLLECT_MODE_POPUP_ALWAYS_ON_TOP
-    after_collect_mode_dialog_close_delay_seconds: float = AFTER_COLLECT_MODE_DIALOG_CLOSE_DELAY_SECONDS
     save_events_when_collect_mode_off: bool = SAVE_EVENTS_WHEN_COLLECT_MODE_OFF
     save_rejected_events_in_collect_mode: bool = SAVE_REJECTED_EVENTS_IN_COLLECT_MODE
 
@@ -140,17 +116,3 @@ def validate_correction_pipeline_mode(mode: str) -> str:
         raise ValueError(f"Unsupported correction pipeline mode: {mode!r}. Allowed modes: {allowed}")
 
     return mode
-
-
-def validate_collect_mode_review_interface(interface: str) -> str:
-    """
-    Validates the collect-mode review interface.
-    """
-    if interface not in ALLOWED_COLLECT_MODE_REVIEW_INTERFACES:
-        allowed = ", ".join(sorted(ALLOWED_COLLECT_MODE_REVIEW_INTERFACES))
-        raise ValueError(
-            f"Unsupported collect mode review interface: {interface!r}. "
-            f"Allowed interfaces: {allowed}"
-        )
-
-    return interface

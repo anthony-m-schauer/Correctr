@@ -49,7 +49,6 @@ ALLOWED_REVIEW_STATUSES = {
 }
 
 DEFAULT_MANUAL_ENGINE_VERSION = "manual_capture_v0.1"
-DEFAULT_COLLECT_MODE_MANUAL_ENGINE_VERSION = "collect_mode_manual_v0.1"
 
 
 def get_database_path(database_path: str | Path | None = None) -> Path:
@@ -335,39 +334,6 @@ def save_manual_correction(
     )
 
 
-def save_collect_mode_manual_correction(
-    *,
-    original_text: str,
-    corrected_text: str,
-    notes: str = "Manual correction from collect mode.",
-    database_path: str | Path | None = None,
-) -> int:
-    """
-    Saves a collect-mode manual correction as trusted accepted data.
-
-    Collect mode is explicitly human-confirmed. When the user edits/fixes the
-    proposed output before applying it, this row is safe to treat as trusted
-    correction memory/export data.
-    """
-    intended_text = corrected_text.strip()
-
-    if not intended_text:
-        raise ValueError("corrected_text cannot be blank.")
-
-    return save_correction_event(
-        original_text=original_text,
-        corrected_text=intended_text,
-        source="manual",
-        changed=original_text != intended_text,
-        corrections=[],
-        engine_version=DEFAULT_COLLECT_MODE_MANUAL_ENGINE_VERSION,
-        notes=notes,
-        database_path=database_path,
-        review_status="accepted",
-        review_notes=notes,
-    )
-
-
 def save_manual_correction_from_event(
     *,
     event_id: int,
@@ -574,7 +540,7 @@ def fetch_trusted_correction_events(
       are excluded.
     - Blank original/corrected text rows are excluded by default.
     - Unchanged original_text == corrected_text rows are excluded by default.
-    - Exact duplicate original_text + corrected_text pairs can be collapsed when requested.
+    - Exact duplicate original_text + corrected_text pairs are collapsed by default.
 
     Args:
         limit:
@@ -590,11 +556,8 @@ def fetch_trusted_correction_events(
         exclude_unchanged:
             If true, excludes rows where original_text == corrected_text.
         deduplicate_exact_pairs:
-            If true, keeps only the first duplicate within the same source and exact
-            original_text + corrected_text pair in the requested order. Database rows
-            are not deleted. This keeps repeated manual duplicate rows from being
-            exported while still allowing separately reviewed manual/dictionary/AI
-            examples to coexist when their sources differ.
+            If true, keeps only the first exact original_text + corrected_text pair
+            in the requested order. Database rows are not deleted.
 
     Returns:
         List of trusted correction event dictionaries.
@@ -655,7 +618,7 @@ def fetch_trusted_correction_events(
         if exclude_unchanged and original_text == corrected_text:
             continue
 
-        exact_pair = (event["source"], original_text, corrected_text)
+        exact_pair = (original_text, corrected_text)
         if deduplicate_exact_pairs and exact_pair in seen_pairs:
             continue
 

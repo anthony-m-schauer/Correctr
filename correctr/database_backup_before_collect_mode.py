@@ -49,7 +49,6 @@ ALLOWED_REVIEW_STATUSES = {
 }
 
 DEFAULT_MANUAL_ENGINE_VERSION = "manual_capture_v0.1"
-DEFAULT_COLLECT_MODE_MANUAL_ENGINE_VERSION = "collect_mode_manual_v0.1"
 
 
 def get_database_path(database_path: str | Path | None = None) -> Path:
@@ -335,39 +334,6 @@ def save_manual_correction(
     )
 
 
-def save_collect_mode_manual_correction(
-    *,
-    original_text: str,
-    corrected_text: str,
-    notes: str = "Manual correction from collect mode.",
-    database_path: str | Path | None = None,
-) -> int:
-    """
-    Saves a collect-mode manual correction as trusted accepted data.
-
-    Collect mode is explicitly human-confirmed. When the user edits/fixes the
-    proposed output before applying it, this row is safe to treat as trusted
-    correction memory/export data.
-    """
-    intended_text = corrected_text.strip()
-
-    if not intended_text:
-        raise ValueError("corrected_text cannot be blank.")
-
-    return save_correction_event(
-        original_text=original_text,
-        corrected_text=intended_text,
-        source="manual",
-        changed=original_text != intended_text,
-        corrections=[],
-        engine_version=DEFAULT_COLLECT_MODE_MANUAL_ENGINE_VERSION,
-        notes=notes,
-        database_path=database_path,
-        review_status="accepted",
-        review_notes=notes,
-    )
-
-
 def save_manual_correction_from_event(
     *,
     event_id: int,
@@ -556,9 +522,6 @@ def fetch_trusted_correction_events(
     database_path: str | Path | None = None,
     include_accepted_ai: bool = True,
     oldest_first: bool = True,
-    exclude_blank: bool = True,
-    exclude_unchanged: bool = True,
-    deduplicate_exact_pairs: bool = True,
 ) -> list[dict[str, Any]]:
     """
     Fetches only correction events safe for personal memory/export/ranker work.
@@ -572,29 +535,16 @@ def fetch_trusted_correction_events(
       positive examples; the linked accepted manual row is trusted instead.
     - rejected, test_event, uncertain, unreviewed, blank, and NULL statuses
       are excluded.
-    - Blank original/corrected text rows are excluded by default.
-    - Unchanged original_text == corrected_text rows are excluded by default.
-    - Exact duplicate original_text + corrected_text pairs can be collapsed when requested.
 
     Args:
         limit:
-            Optional maximum number of trusted events to return after filtering.
+            Optional maximum number of events to return.
         database_path:
             Optional override database path.
         include_accepted_ai:
             Whether explicitly accepted ai_context rows should be included.
         oldest_first:
             If true, returns oldest trusted examples first.
-        exclude_blank:
-            If true, excludes rows with blank original_text or corrected_text.
-        exclude_unchanged:
-            If true, excludes rows where original_text == corrected_text.
-        deduplicate_exact_pairs:
-            If true, keeps only the first duplicate within the same source and exact
-            original_text + corrected_text pair in the requested order. Database rows
-            are not deleted. This keeps repeated manual duplicate rows from being
-            exported while still allowing separately reviewed manual/dictionary/AI
-            examples to coexist when their sources differ.
 
     Returns:
         List of trusted correction event dictionaries.
@@ -609,92 +559,9 @@ def fetch_trusted_correction_events(
 
     placeholders = ", ".join("?" for _ in trusted_sources)
     order_direction = "ASC" if oldest_first else "DESC"
+    limit_clause = "" if limit is None else " LIMIT ?"
 
     params: list[Any] = ["accepted", *trusted_sources]
-
-    db_path = initialize_database(database_path)
-
-    with _connect(db_path) as connection:
-        rows = connection.execute(
-            f"""
-            SELECT
-                id,
-                created_at,
-                source,
-                original_text,
-                corrected_text,
-                changed,
-                corrections_json,
-                engine_version,
-                notes,
-                review_status,
-                reviewed_at,
-                linked_event_id,
-                review_notes
-            FROM correction_events
-            WHERE review_status = ?
-              AND source IN ({placeholders})
-            ORDER BY created_at {order_direction}, id {order_direction}
-            """,
-            tuple(params),
-        ).fetchall()
-
-    trusted_events: list[dict[str, Any]] = []
-    seen_pairs: set[tuple[str, str]] = set()
-
-    for row in rows:
-        event = _row_to_event(row)
-        original_text = event["original_text"]
-        corrected_text = event["corrected_text"]
-
-        if exclude_blank and (
-            not original_text.strip() or not corrected_text.strip()
-        ):
-            continue
-
-        if exclude_unchanged and original_text == corrected_text:
-            continue
-
-        exact_pair = (event["source"], original_text, corrected_text)
-        if deduplicate_exact_pairs and exact_pair in seen_pairs:
-            continue
-
-        seen_pairs.add(exact_pair)
-        trusted_events.append(event)
-
-        if limit is not None and len(trusted_events) >= limit:
-            break
-
-    return trusted_events
-
-
-def fetch_all_correction_events(
-    *,
-    limit: int | None = None,
-    database_path: str | Path | None = None,
-    oldest_first: bool = True,
-) -> list[dict[str, Any]]:
-    """
-    Fetches all correction events for local QA/reporting.
-
-    Args:
-        limit:
-            Optional maximum number of events to return.
-        database_path:
-            Optional override database path.
-        oldest_first:
-            If true, returns oldest events first.
-
-    Returns:
-        List of event dictionaries.
-    """
-    if limit is not None and limit < 1:
-        raise ValueError("limit must be at least 1.")
-
-    order_direction = "ASC" if oldest_first else "DESC"
-    limit_clause = "" if limit is None else " LIMIT ?"
-    params: list[Any] = []
-
     if limit is not None:
         params.append(limit)
 
@@ -718,6 +585,8 @@ def fetch_all_correction_events(
                 linked_event_id,
                 review_notes
             FROM correction_events
+            WHERE review_status = ?
+              AND source IN ({placeholders})
             ORDER BY created_at {order_direction}, id {order_direction}
             {limit_clause}
             """,

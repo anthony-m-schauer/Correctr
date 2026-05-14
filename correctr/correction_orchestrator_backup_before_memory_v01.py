@@ -31,7 +31,6 @@ from correctr.config import (
 )
 from correctr.correction_engine import CorrectionResult, correct_text_detailed
 from correctr.llm_engine import correct_with_ai_context
-from correctr.personal_memory import correct_with_personal_memory
 
 
 ORCHESTRATOR_VERSION = "orchestrator_v0.2"
@@ -41,7 +40,6 @@ PipelineMode = Literal[
     "dictionary_then_ai_if_unchanged",
     "dictionary_then_ai_always",
     "dictionary_then_ai_if_needed",
-    "memory_then_dictionary_then_ai_if_needed",
 ]
 
 
@@ -103,22 +101,9 @@ def correct_with_orchestration(
             Run dictionary correction first.
             Use lightweight typo/spacing signals to decide whether AI/context
             should run. This avoids calling AI on obviously clean text.
-
-        memory_then_dictionary_then_ai_if_needed:
-            Run trusted personal memory lookup first.
-            If memory finds a trusted manual match, return it.
-            Otherwise fall back to dictionary_then_ai_if_needed.
     """
     pipeline_mode = validate_correction_pipeline_mode(pipeline_mode)
     ai_provider_mode = validate_ai_provider(ai_provider_mode)
-
-    if pipeline_mode == "memory_then_dictionary_then_ai_if_needed":
-        memory_result = correct_with_personal_memory(text)
-
-        if memory_result.changed:
-            return memory_result
-
-        pipeline_mode = "dictionary_then_ai_if_needed"
 
     dictionary_result = correct_text_detailed(text)
 
@@ -276,14 +261,8 @@ def get_event_source_for_result(result: CorrectionResult) -> str:
         No-change results should be skipped before calling this function.
     """
     for record in result.corrections:
-        if record.get("pipeline_stage") == "personal_memory":
-            return "future_memory"
-
         if record.get("pipeline_stage") == "ai_context":
             return "ai_context"
-
-    if result.engine_version.startswith("personal_memory_v0.1"):
-        return "future_memory"
 
     if result.engine_version.endswith(":ai_context") or result.engine_version.endswith(":dictionary_then_ai"):
         return "ai_context"
